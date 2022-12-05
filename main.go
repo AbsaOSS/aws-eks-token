@@ -34,13 +34,6 @@ type Config struct {
 
 var conf Config
 
-func init() {
-	flag.StringVar(&conf.Region, "region", "", "")
-	flag.StringVar(&conf.ClusterID, "cluster-name", "", "")
-	flag.StringVar(&conf.RoleARN, "role-arn", "", "")
-	flag.Parse()
-}
-
 func validateConfig(c Config) error {
 	if c.ClusterID == "" {
 		return errors.New("cluster-name cannot be empty")
@@ -48,7 +41,7 @@ func validateConfig(c Config) error {
 	return nil
 }
 
-func getToken(c Config) string {
+func getToken(c Config) (string, error) {
 	cfg, err := config.LoadDefaultConfig(context.TODO())
 
 	if c.Region != "" {
@@ -65,10 +58,12 @@ func getToken(c Config) string {
 
 	getCallerIdentity, err := presignClient.PresignGetCallerIdentity(context.TODO(), &sts.GetCallerIdentityInput{})
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 
-	return v1Prefix + b64.RawURLEncoding.EncodeToString([]byte(getCallerIdentity.URL))
+	token := b64.RawURLEncoding.EncodeToString([]byte(getCallerIdentity.URL))
+
+	return v1Prefix + token, nil
 }
 
 func formatJSON(token string) []byte {
@@ -95,11 +90,20 @@ func formatJSON(token string) []byte {
 	return jsonData
 }
 func main() {
+	flag.StringVar(&conf.Region, "region", "", "")
+	flag.StringVar(&conf.ClusterID, "cluster-name", "", "")
+	flag.StringVar(&conf.RoleARN, "role-arn", "", "")
+	flag.Parse()
+
 	err := validateConfig(conf)
 	if err != nil {
 		panic(err)
 	}
-	token := getToken(conf)
+	token, err := getToken(conf)
+	if err != nil {
+		panic(err)
+	}
+
 	fmt.Println(string(formatJSON(token)))
 
 	return
